@@ -1,0 +1,32 @@
+# XRPL Validator Node — configuration
+# Copy to config/validator.conf and fill in your values, OR run motd/setup.sh.
+# After editing, run: sudo cp config/validator.conf /etc/validator-node/validator.conf
+
+# Linux username that runs the metrics-server service
+VALIDATOR_USERNAME=
+
+# Absolute path to your home directory
+VALIDATOR_HOME=
+
+# Directory containing your validator key JSON file (*.json)
+# Typically ~/.ripple or a custom path
+VALIDATOR_JSON_DIR=
+
+# Your validator domain — shown in the MOTD subtitle and identity section
+VALIDATOR_DOMAIN=
+
+# Tailscale Funnel URL for the web dashboard (validator.html)
+# Example: https://myhostname.tail12345.ts.net
+# Leave empty if not using Tailscale Funnel; patch later by re-running setup.sh
+METRICS_URL=
+
+# Absolute path to this cloned repository
+REPO_PATH=
+
+# Optional: path to rippled Feature.cpp source for vote-default parsing
+# Only needed if you compile rippled from source; leave empty otherwise
+XRPL_FEATURES_SRC=
+
+# Path to your rippled.cfg — used to parse [veto_amendments] and [amendments]
+# Default covers both common package install locations
+RIPPLED_CFG=/etc/opt/ripple/rippled.cfg
