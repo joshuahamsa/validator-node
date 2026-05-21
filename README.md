@@ -20,6 +20,11 @@ On every SSH login you get a live dashboard showing validator state, system reso
 **`GET /metrics` JSON endpoint** (port 8080, localhost):
 - Same data as above in machine-readable JSON, with CORS enabled
 
+**Web dashboard** (`frontend/validator.html`):
+- Browser-based version of the dashboard, fetches from your Tailscale Funnel URL every 5s
+- Graceful offline handling with last-seen timestamp
+- Host on GitHub Pages or any static host
+
 ---
 
 ## Prerequisites
@@ -144,4 +149,8 @@ motd/
 ├── install-service.sh      # Deploy metrics-server systemd unit + sudoers
 ├── install-rapl.sh         # Deploy RAPL CPU power reader
 └── cron-install.sh         # Deploy cron job + MOTD hook
+
+frontend/
+├── validator.html          # Browser dashboard — update METRICS_URL to your Tailscale Funnel URL
+└── styles.css              # Shared stylesheet
 ```
