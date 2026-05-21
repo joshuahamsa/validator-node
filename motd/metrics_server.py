@@ -13,6 +13,8 @@ import subprocess
 import time
 from pathlib import Path
 
+XRPL_FEATURES_SRC = os.environ.get("XRPL_FEATURES_SRC", "")
+RIPPLED_CFG = os.environ.get("RIPPLED_CFG", "/etc/opt/ripple/rippled.cfg")
 RIPPLED = "/usr/local/bin/rippled"
 RAPL_READER = "/usr/local/bin/rapl-energy-uj"
 _json_files = list(Path("/home/hamsa/.ripple").glob("*.json"))
@@ -20,6 +22,53 @@ VALIDATOR_JSON = str(_json_files[0]) if _json_files else ""
 PORT = 8080
 
 RIPPLED_ADMIN_RPC = "127.0.0.1:5006"
+
+
+def _parse_vote_defaults() -> dict:
+    """Parse XRPL_FEATURE macros from rippled source to get default vote behavior."""
+    result = {}
+    try:
+        with open(XRPL_FEATURES_SRC) as f:
+            for line in f:
+                m = re.search(
+                    r'XRPL_FEATURE\(\s*(\w+)\s*,\s*\S+\s*,\s*VoteBehavior::Default(\w+)\)',
+                    line,
+                )
+                if m:
+                    name, behavior = m.group(1), m.group(2)
+                    result[name] = "yes" if behavior == "Yes" else "no"
+    except (FileNotFoundError, OSError):
+        pass
+    return result
+
+
+def _parse_cfg_overrides() -> dict:
+    """Parse [veto_amendments] and [amendments] from rippled.cfg.
+
+    Returns hash -> 'no' for vetoed, hash -> 'yes' for forced-yes.
+    """
+    result = {}
+    try:
+        current_section = None
+        with open(RIPPLED_CFG) as f:
+            for line in f:
+                stripped = line.strip()
+                if stripped.startswith("["):
+                    current_section = stripped.strip("[]").strip()
+                    continue
+                if not stripped or stripped.startswith("#"):
+                    continue
+                hash_ = stripped.split()[0]
+                if current_section == "veto_amendments":
+                    result[hash_] = "no"
+                elif current_section == "amendments":
+                    result[hash_] = "yes"
+    except FileNotFoundError:
+        pass
+    return result
+
+
+_VOTE_DEFAULTS: dict = _parse_vote_defaults()
 
 # RAPL inter-sample state — power is Δenergy / Δtime across fetch interval
 _rapl_prev_uj: "int | None" = None
@@ -239,6 +288,7 @@ def get_amendments() -> list:
             timeout=10, text=True, stderr=subprocess.DEVNULL,
         )
         features = json.loads(raw)["result"]["features"]
+        cfg_overrides = _parse_cfg_overrides()
         result = []
         for hash_, data in features.items():
             if data.get("enabled"):
@@ -246,7 +296,12 @@ def get_amendments() -> list:
             if data.get("vetoed") == "Obsolete":
                 continue
             name = data.get("name", "")
-            vote = "no" if data.get("vetoed") is True else "yes"
+            if hash_ in cfg_overrides:
+                vote = cfg_overrides[hash_]
+            elif name in _VOTE_DEFAULTS:
+                vote = _VOTE_DEFAULTS[name]
+            else:
+                vote = "no" if data.get("vetoed") is True else "yes"
             result.append({
                 "name": name,
                 "vote": vote,
