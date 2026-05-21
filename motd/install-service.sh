@@ -40,7 +40,7 @@ echo "  done."
 echo "=== Enabling and starting metrics-server ==="
 systemctl daemon-reload
 systemctl enable metrics-server
-systemctl start metrics-server
+systemctl restart metrics-server
 sleep 2
 systemctl status metrics-server
 
