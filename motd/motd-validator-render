@@ -6,6 +6,25 @@ set -euo pipefail
 export LC_ALL=en_US.UTF-8
 export PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 
+# ── Load config ───────────────────────────────────────────────────────────────
+# Primary: system-wide install. Dev fallback: git root config. Test mode (_SOURCED=1):
+# caller sets VALIDATOR_JSON_DIR etc. directly, missing config is tolerated.
+_SYSTEM_CONFIG="/etc/validator-node/validator.conf"
+if [[ -f "$_SYSTEM_CONFIG" ]]; then
+    source "$_SYSTEM_CONFIG"
+else
+    _git_root=""
+    if command -v git &>/dev/null; then
+        _git_root=$(git -C "$(dirname "$(readlink -f "$0")")" rev-parse --show-toplevel 2>/dev/null || true)
+    fi
+    if [[ -n "$_git_root" && -f "$_git_root/config/validator.conf" ]]; then
+        source "$_git_root/config/validator.conf"
+    elif [[ -z "${_SOURCED:-}" ]]; then
+        echo "ERROR: config not found at $_SYSTEM_CONFIG. Run motd/setup.sh first." >&2
+        exit 1
+    fi
+fi
+
 VALIDATOR_JSON=""
 CACHE_FILE="/var/cache/motd-validator"
 CACHE_TMP="${CACHE_FILE}.tmp"
@@ -134,12 +153,12 @@ _BANNER_LPAD="         "   # 9 spaces
 _BANNER_RPAD="          "  # 10 spaces
 
 print_header() {
-    local pubkey="unknown" manifest_seq="?" domain="joshuahamsa.com"
+    local pubkey="unknown" manifest_seq="?" domain="${VALIDATOR_DOMAIN:-}"
 
     if [[ -n "$VALIDATOR_JSON" && -f "$VALIDATOR_JSON" ]]; then
         pubkey=$(jq -r '.public_key // "unknown"' "$VALIDATOR_JSON" 2>/dev/null)
         manifest_seq=$(jq -r '.token_sequence // "?"' "$VALIDATOR_JSON" 2>/dev/null)
-        domain=$(jq -r '.domain // "joshuahamsa.com"' "$VALIDATOR_JSON" 2>/dev/null)
+        domain=$(jq -r --arg d "${VALIDATOR_DOMAIN:-}" '.domain // $d' "$VALIDATOR_JSON" 2>/dev/null)
     fi
 
     local key_short="${pubkey:0:6}···${pubkey: -4}"
@@ -529,11 +548,11 @@ print_amendments() {
 }
 
 print_identity() {
-    local pubkey="unknown" revoked="false" domain="joshuahamsa.com" seq="?"
+    local pubkey="unknown" revoked="false" domain="${VALIDATOR_DOMAIN:-}" seq="?"
     if [[ -n "$VALIDATOR_JSON" && -f "$VALIDATOR_JSON" ]]; then
         pubkey=$(jq -r '.public_key // "unknown"' "$VALIDATOR_JSON" 2>/dev/null)
         revoked=$(jq -r '.revoked // false'       "$VALIDATOR_JSON" 2>/dev/null)
-        domain=$(jq -r '.domain // "joshuahamsa.com"' "$VALIDATOR_JSON" 2>/dev/null)
+        domain=$(jq -r --arg d "${VALIDATOR_DOMAIN:-}" '.domain // $d' "$VALIDATOR_JSON" 2>/dev/null)
         seq=$(jq -r '.token_sequence // "?"'      "$VALIDATOR_JSON" 2>/dev/null)
     fi
 
@@ -565,7 +584,7 @@ print_footer() {
 }
 
 main() {
-    VALIDATOR_JSON=$(ls /home/hamsa/.ripple/*.json 2>/dev/null | head -1 || true)
+    VALIDATOR_JSON=$(ls "${VALIDATOR_JSON_DIR:-}"/*.json 2>/dev/null | head -1 || true)
 
     # Render full dashboard to temp file. On failure, write an error notice instead.
     {
