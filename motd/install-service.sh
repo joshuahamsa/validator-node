@@ -31,6 +31,8 @@ echo "  done."
 echo "=== Writing /etc/sudoers.d/metrics-server ==="
 tee /etc/sudoers.d/metrics-server > /dev/null << 'EOF'
 hamsa ALL=(ALL) NOPASSWD: /usr/local/bin/rippled server_info
+hamsa ALL=(ALL) NOPASSWD: /usr/local/bin/rippled --rpc_ip=127.0.0.1:5006 feature
+hamsa ALL=(ALL) NOPASSWD: /usr/local/bin/rapl-energy-uj
 EOF
 chmod 0440 /etc/sudoers.d/metrics-server
 visudo -c

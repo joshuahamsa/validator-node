@@ -19,37 +19,7 @@ _json_files = list(Path("/home/hamsa/.ripple").glob("*.json"))
 VALIDATOR_JSON = str(_json_files[0]) if _json_files else ""
 PORT = 8080
 
-FEATURES_MACRO = "/home/hamsa/rippled/include/xrpl/protocol/detail/features.macro"
-RIPPLED_CFG = "/etc/opt/ripple/rippled.cfg"
-
-
-import amend_lib as _alib
-
-
-def _parse_vote_defaults() -> dict:
-    try:
-        return _alib.parse_vote_defaults(open(FEATURES_MACRO).read())
-    except Exception:
-        return {}
-
-
-def _parse_obsolete_features() -> set:
-    try:
-        return _alib.parse_obsolete_features(open(FEATURES_MACRO).read())
-    except Exception:
-        return set()
-
-
-_VOTE_DEFAULTS: dict = _parse_vote_defaults()
-_OBSOLETE_FEATURES: set = _parse_obsolete_features()
-
-
-def _parse_cfg_overrides() -> dict:
-    try:
-        return _alib.parse_cfg_overrides(open(RIPPLED_CFG).read())
-    except Exception:
-        return {}
-
+RIPPLED_ADMIN_RPC = "127.0.0.1:5006"
 
 # RAPL inter-sample state — power is Δenergy / Δtime across fetch interval
 _rapl_prev_uj: "int | None" = None
@@ -265,25 +235,18 @@ def get_alerts():
 def get_amendments() -> list:
     try:
         raw = subprocess.check_output(
-            ["sudo", RIPPLED, "feature"],
+            ["sudo", RIPPLED, f"--rpc_ip={RIPPLED_ADMIN_RPC}", "feature"],
             timeout=10, text=True, stderr=subprocess.DEVNULL,
         )
         features = json.loads(raw)["result"]["features"]
-        overrides = _parse_cfg_overrides()
         result = []
         for hash_, data in features.items():
             if data.get("enabled"):
                 continue
-            name = data.get("name", "")
-            if name in _OBSOLETE_FEATURES or data.get("vetoed") == "Obsolete":
+            if data.get("vetoed") == "Obsolete":
                 continue
-            vetoed_val = data.get("vetoed")
-            if vetoed_val is True:
-                vote = "no"
-            elif vetoed_val is False:
-                vote = "yes"
-            else:
-                vote = overrides.get(hash_) or _VOTE_DEFAULTS.get(name, "no")
+            name = data.get("name", "")
+            vote = "no" if data.get("vetoed") is True else "yes"
             result.append({
                 "name": name,
                 "vote": vote,

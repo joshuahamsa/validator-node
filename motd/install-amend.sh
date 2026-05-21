@@ -19,6 +19,7 @@ chmod 644 /usr/local/bin/amend_lib.py
 
 echo "=== Writing sudoers entry ==="
 tee /etc/sudoers.d/amend > /dev/null << 'EOF'
+hamsa ALL=(ALL) NOPASSWD: /usr/local/bin/rippled --rpc_ip=127.0.0.1:5006 feature
 hamsa ALL=(ALL) NOPASSWD: /usr/bin/cat /etc/opt/ripple/rippled.cfg
 hamsa ALL=(ALL) NOPASSWD: /usr/bin/cp /etc/opt/ripple/rippled.cfg /etc/opt/ripple/rippled.cfg.bak
 hamsa ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/opt/ripple/rippled.cfg

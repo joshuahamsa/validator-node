@@ -42,13 +42,12 @@ def _render(amendment: dict, idx: int, total: int) -> None:
     console.clear()
     a = amendment
     vote_str = "[bold green]YES[/]" if a["your_vote"] == "yes" else "[bold red]NO[/]"
-    default_str = "YES" if a["default_vote"] == "yes" else "NO"
     supported_str = "[green]✓[/]" if a["supported"] else "[bold red]✗ UNSUPPORTED — upgrade rippled before this activates[/]"
     majority_tag = "  [yellow]\\[majority][/yellow]" if a["majority"] else ""
-    changed = a["your_vote"] != a.get("_written_vote", a["your_vote"])
+    changed = a["your_vote"] != a["_written_vote"]
 
     body = (
-        f"Default: {default_str}   Your vote: {vote_str}"
+        f"Your vote: {vote_str}"
         + ("  [dim](unsaved)[/dim]" if changed else "") + "\n"
         f"Supported: {supported_str}\n\n"
         f"{a['description'] or '[dim]No description available.[/dim]'}"
@@ -65,7 +64,7 @@ def _render(amendment: dict, idx: int, total: int) -> None:
 
 def _write_vote(amendment: dict) -> None:
     try:
-        amend_lib.write_cfg_vote(amendment["hash"], amendment["your_vote"], amendment["default_vote"])
+        amend_lib.write_cfg_vote(amendment["hash"], amendment["your_vote"])
         amendment["_written_vote"] = amendment["your_vote"]
         console.print(f"[green]✓ Written:[/] {amendment['name']} → {amendment['your_vote'].upper()}")
     except subprocess.CalledProcessError as e:
@@ -86,7 +85,7 @@ def _restart_rippled() -> None:
 
 
 def _handle_quit(amendments: list) -> bool:
-    unsaved = [a for a in amendments if a["your_vote"] != a.get("_written_vote", a["default_vote"])]
+    unsaved = [a for a in amendments if a["your_vote"] != a["_written_vote"]]
     if not unsaved:
         return True
     console.print(f"\n[yellow]{len(unsaved)} vote(s) not written to config.[/]")
@@ -103,16 +102,6 @@ def _handle_quit(amendments: list) -> bool:
 def main() -> None:
     console.print("[bold cyan]amend[/] — XRPL Amendment Voting CLI\n")
 
-    console.print("[dim]Loading features.macro...[/]")
-    try:
-        macro_text = Path(amend_lib.FEATURES_MACRO).read_text()
-    except FileNotFoundError:
-        console.print(f"[red]features.macro not found at {amend_lib.FEATURES_MACRO}[/]")
-        sys.exit(1)
-
-    vote_defaults = amend_lib.parse_vote_defaults(macro_text)
-    obsolete = amend_lib.parse_obsolete_features(macro_text)
-
     console.print("[dim]Fetching live amendment state from rippled...[/]")
     try:
         features = amend_lib.get_live_features()
@@ -120,21 +109,12 @@ def main() -> None:
         console.print(f"[red]Failed to query rippled:[/] {e}")
         sys.exit(1)
 
-    console.print("[dim]Reading config overrides...[/]")
-    try:
-        cfg_text = subprocess.check_output(
-            ["sudo", "cat", amend_lib.RIPPLED_CFG], text=True, stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        cfg_text = ""
-    cfg_overrides = amend_lib.parse_cfg_overrides(cfg_text)
-
     console.print("[dim]Fetching amendment descriptions from xrpl.org...[/]")
     descriptions = amend_lib.fetch_amendment_descriptions()
     if not descriptions:
         console.print("[yellow]Warning: could not fetch descriptions (offline?)[/]")
 
-    amendments = amend_lib.compute_working_set(features, vote_defaults, obsolete, cfg_overrides)
+    amendments = amend_lib.compute_working_set(features)
 
     session_path = Path(amend_lib.SESSION_FILE)
     if session_path.exists():
@@ -150,7 +130,7 @@ def main() -> None:
 
     for a in amendments:
         a["description"] = descriptions.get(a["name"], "")
-        a["_written_vote"] = cfg_overrides.get(a["hash"], a["default_vote"])
+        a["_written_vote"] = a["your_vote"]
 
     if not amendments:
         console.print("\n[green]✓ Nothing to review — no pending amendments.[/]")

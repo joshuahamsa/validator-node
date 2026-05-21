@@ -3,91 +3,70 @@
 import html.parser
 import json
 import re
+import sqlite3
 import subprocess
 import urllib.request
 from pathlib import Path
 
 RIPPLED = "/usr/local/bin/rippled"
+RIPPLED_ADMIN_RPC = "127.0.0.1:5006"
 RIPPLED_CFG = "/etc/opt/ripple/rippled.cfg"
-FEATURES_MACRO = "/home/hamsa/rippled/include/xrpl/protocol/detail/features.macro"
+WALLET_DB = "/var/lib/rippled/db/wallet.db"
 SESSION_FILE = "/tmp/amend-session.json"
 XRPL_AMENDMENTS_URL = "https://xrpl.org/known-amendments.html"
 
 
-def parse_vote_defaults(macro_text: str) -> dict:
-    """Parse VoteBehavior from features.macro → {name: 'yes'|'no'}. Excludes Obsolete."""
-    matches = re.findall(
-        r'XRPL_(?:FEATURE|FIX)\s*\(\s*(\w+)\s*,\s*Supported::\w+\s*,'
-        r'\s*VoteBehavior::(\w+)\s*\)',
-        macro_text,
-    )
-    return {name: ("yes" if vote == "DefaultYes" else "no")
-            for name, vote in matches if vote != "Obsolete"}
-
-
-def parse_obsolete_features(macro_text: str) -> set:
-    """Return set of amendment names marked VoteBehavior::Obsolete."""
-    return set(re.findall(
-        r'XRPL_(?:FEATURE|FIX)\s*\(\s*(\w+)\s*,\s*Supported::\w+\s*,'
-        r'\s*VoteBehavior::Obsolete\s*\)',
-        macro_text,
-    ))
-
-
-def parse_cfg_overrides(cfg_text: str) -> dict:
-    """Parse [amendments] and [veto_amendments] sections → {hash: 'yes'|'no'}."""
-    overrides: dict = {}
-    section = None
-    for line in cfg_text.splitlines():
-        line = line.strip()
-        if line.startswith("["):
-            section = line.strip("[]")
-        elif section == "veto_amendments" and line and not line.startswith("#"):
-            overrides[line] = "no"
-        elif section == "amendments" and line and not line.startswith("#"):
-            overrides[line] = "yes"
-    return overrides
-
-
 def get_live_features() -> dict:
-    """Call `sudo rippled feature` and return features dict keyed by hash."""
+    """Call `sudo rippled --rpc_ip feature` and return features dict keyed by hash.
+
+    Using the admin RPC port returns the complete vetoed field (true/false/Obsolete)
+    which is the authoritative synthesized view of wallet.db + rippled.cfg votes.
+    """
     raw = subprocess.check_output(
-        ["sudo", RIPPLED, "feature"],
+        ["sudo", RIPPLED, f"--rpc_ip={RIPPLED_ADMIN_RPC}", "feature"],
         timeout=10, text=True, stderr=subprocess.DEVNULL,
     )
     return json.loads(raw)["result"]["features"]
 
 
-def compute_working_set(
-    features: dict,
-    vote_defaults: dict,
-    obsolete: set,
-    cfg_overrides: dict,
-) -> list:
+def get_wallet_votes(wallet_db: str = WALLET_DB) -> dict:
+    """Read amendment vote preferences from wallet.db → {hash_upper: 'yes'|'no'}.
+
+    rippled's `feature` RPC omits the `vetoed` field for non-vetoed amendments
+    instead of returning false, so wallet.db is the authoritative source for
+    explicit yes votes. Later rows win on hash collision (highest rowid).
+    """
+    try:
+        con = sqlite3.connect(f"file:{wallet_db}?mode=ro", uri=True)
+        rows = con.execute(
+            "SELECT AmendmentHash, Veto FROM FeatureVotes ORDER BY rowid"
+        ).fetchall()
+        return {h.upper(): ("no" if v else "yes") for h, v in rows}
+    except Exception:
+        return {}
+
+
+def compute_working_set(features: dict) -> list:
     """Return all pending (not yet enabled, not obsolete) amendments.
 
-    Excludes: enabled amendments, obsolete amendments.
+    Uses the `vetoed` field from the admin RPC as the authoritative vote:
+    - vetoed: true  → node votes NO
+    - vetoed: false → node votes YES
+    - vetoed: "Obsolete" → skip
+
     Sorted: majority amendments first, then alphabetical by name.
     """
     result = []
     for hash_, data in features.items():
         if data.get("enabled"):
             continue
-        name = data.get("name", "")
-        if name in obsolete or data.get("vetoed") == "Obsolete":
+        if data.get("vetoed") == "Obsolete":
             continue
-        default_vote = vote_defaults.get(name, "no")
-        vetoed_val = data.get("vetoed")
-        if vetoed_val is True:
-            your_vote = "no"
-        elif vetoed_val is False:
-            your_vote = "yes"
-        else:
-            your_vote = cfg_overrides.get(hash_) or default_vote
+        name = data.get("name", "")
+        your_vote = "no" if data.get("vetoed") is True else "yes"
         result.append({
             "hash": hash_,
             "name": name,
-            "default_vote": default_vote,
             "your_vote": your_vote,
             "majority": "majority" in data,
             "supported": data.get("supported", False),
@@ -129,21 +108,19 @@ def _add_hash_to_section(cfg_text: str, hash_: str, section: str) -> str:
     return "".join(result)
 
 
-def update_cfg_text(cfg_text: str, hash_: str, vote: str, default_vote: str) -> str:
-    """Return updated cfg text with hash voted correctly. Pure — no side effects."""
+def update_cfg_text(cfg_text: str, hash_: str, vote: str) -> str:
+    """Return updated cfg text with hash voted explicitly. Pure — no side effects."""
     cleaned = _remove_hash_from_sections(cfg_text, hash_)
-    if vote != default_vote:
-        target = "amendments" if vote == "yes" else "veto_amendments"
-        cleaned = _add_hash_to_section(cleaned, hash_, target)
-    return cleaned
+    target = "amendments" if vote == "yes" else "veto_amendments"
+    return _add_hash_to_section(cleaned, hash_, target)
 
 
-def write_cfg_vote(hash_: str, vote: str, default_vote: str) -> None:
+def write_cfg_vote(hash_: str, vote: str) -> None:
     """Backup cfg, then write a single amendment vote. Requires sudo."""
     cfg_text = subprocess.check_output(
         ["sudo", "cat", RIPPLED_CFG], text=True, stderr=subprocess.DEVNULL,
     )
-    new_cfg = update_cfg_text(cfg_text, hash_, vote, default_vote)
+    new_cfg = update_cfg_text(cfg_text, hash_, vote)
     subprocess.run(
         ["sudo", "cp", RIPPLED_CFG, RIPPLED_CFG + ".bak"], check=True,
     )
