@@ -123,6 +123,59 @@ while IFS= read -r line; do
     fi
 done < <(print_validator_system)
 
+echo ""
+echo "=== print_validator_system CPU temp/power rows ==="
+
+# Set up system data with temp and power
+SYS_CPU_TEMP_C=55
+SYS_CPU_W=12.3
+
+# Temp row should be 80 visible chars
+temp_ok=false
+while IFS= read -r line; do
+    stripped=$(strip_ansi "$line")
+    if [[ "$stripped" =~ "Temp" && "$stripped" =~ "°C" ]]; then
+        [[ ${#stripped} -eq 80 ]] \
+            && ok "CPU temp row: width 80" \
+            || fail "CPU temp row: width 80" "${#stripped}" "80"
+        [[ "$stripped" =~ "55°C" ]] \
+            && ok "CPU temp row: value present" \
+            || fail "CPU temp row: value present" "$stripped" "contains 55°C"
+        temp_ok=true; break
+    fi
+done < <(print_validator_system)
+$temp_ok || fail "CPU temp row: found" "" "row with Temp + °C"
+
+# CPU W row should be 80 visible chars
+cpuw_ok=false
+while IFS= read -r line; do
+    stripped=$(strip_ansi "$line")
+    if [[ "$stripped" =~ "CPU W" && "$stripped" =~ "W" ]]; then
+        [[ ${#stripped} -eq 80 ]] \
+            && ok "CPU W row: width 80" \
+            || fail "CPU W row: width 80" "${#stripped}" "80"
+        [[ "$stripped" =~ "12.3W" ]] \
+            && ok "CPU W row: value present" \
+            || fail "CPU W row: value present" "$stripped" "contains 12.3W"
+        cpuw_ok=true; break
+    fi
+done < <(print_validator_system)
+$cpuw_ok || fail "CPU W row: found" "" "row with CPU W"
+
+# Null temp: no Temp row should appear
+SYS_CPU_TEMP_C=""
+SYS_CPU_W=""
+temp_absent=true
+while IFS= read -r line; do
+    stripped=$(strip_ansi "$line")
+    if [[ "$stripped" =~ "Temp" && "$stripped" =~ "°C" ]]; then
+        temp_absent=false; break
+    fi
+done < <(print_validator_system)
+$temp_absent \
+    && ok "CPU temp row: absent when empty" \
+    || fail "CPU temp row: absent when empty" "" "no Temp row"
+
 # ── print_amendments ─────────────────────────────────────────────────────────
 echo ""
 echo "=== print_amendments ==="

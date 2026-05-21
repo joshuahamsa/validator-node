@@ -205,6 +205,8 @@ SYS_DISK_USED="—"
 SYS_DISK_TOTAL="—"
 SYS_DISK_PCT=0
 SYS_UPTIME="—"
+SYS_CPU_TEMP_C=""
+SYS_CPU_W=""
 
 # Network globals
 NET_LAN="—"
@@ -297,6 +299,8 @@ collect_data() {
         METRICS_JSON="$_metrics"
         AMD_JSON=$(printf '%s' "$METRICS_JSON" | jq -c '.amendments // []' 2>/dev/null) \
             || AMD_ERROR=true
+        SYS_CPU_TEMP_C=$(printf '%s' "$METRICS_JSON" | jq -r '.system.cpu_temp_c // empty' 2>/dev/null || true)
+        SYS_CPU_W=$(printf '%s' "$METRICS_JSON" | jq -r '.system.cpu_w // empty' 2>/dev/null || true)
     fi
 }
 
@@ -387,6 +391,19 @@ print_validator_system() {
     box_row2 \
         "    Load    ${load_color}$(rpad "${RPC_LOAD}x" $(( LEFT_COL - 12 )))${RESET}" \
         "    Up    ${GREEN}$(rpad "$SYS_UPTIME" $(( RIGHT_COL - 10 )))${RESET}"
+    if [[ -n "$SYS_CPU_TEMP_C" ]]; then
+        local temp_color="$GREEN"
+        (( SYS_CPU_TEMP_C >= 60 )) && temp_color="$AMBER"
+        (( SYS_CPU_TEMP_C >= 80 )) && temp_color="$RED"
+        box_row2 \
+            "$(rpad "" $LEFT_COL)" \
+            "    Temp  ${temp_color}$(rpad "${SYS_CPU_TEMP_C}°C" $(( RIGHT_COL - 10 )))${RESET}"
+    fi
+    if [[ -n "$SYS_CPU_W" ]]; then
+        box_row2 \
+            "$(rpad "" $LEFT_COL)" \
+            "    CPU W ${WHITE}$(rpad "${SYS_CPU_W}W" $(( RIGHT_COL - 10 )))${RESET}"
+    fi
 }
 
 print_peers_network() {
