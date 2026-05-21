@@ -1,5 +1,6 @@
 #!/bin/bash
-# Run with: sudo bash /home/hamsa/motd/cron-install.sh
+# Run with: sudo bash /path/to/validator-node/motd/cron-install.sh
+# Called automatically by setup.sh — no need to run directly.
 
 set -euo pipefail
 

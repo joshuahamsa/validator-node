@@ -40,48 +40,50 @@ On every SSH login you get a live dashboard showing validator state, system reso
 
 ## Installation
 
-Clone the repo and run the install scripts in order. All scripts require `sudo`.
+Clone the repo and run the setup wizard. The wizard handles all configuration and installs all components.
 
 ```bash
 git clone https://github.com/joshuahamsa/validator-node.git
-cd validator-node/motd
+cd validator-node
+bash motd/setup.sh
 ```
 
-### 1. Metrics server (core)
+`setup.sh` prompts for:
+- Your Linux username and home directory
+- Path to your validator key JSON directory (usually `~/.ripple`)
+- Your validator domain
+- Your Tailscale Funnel URL (optional — can configure later)
 
-Installs the systemd service that serves `/metrics` on port 8080, and writes sudoers entries so it can call `rippled` without a password.
+It writes `config/validator.conf`, installs it to `/etc/validator-node/validator.conf`, and optionally runs all install scripts for you.
 
-```bash
-sudo bash install-service.sh
-```
+### Manual installation (advanced)
 
-**Adapt for your username:** The service runs as `hamsa` and references `/home/hamsa/validator-node/motd/metrics_server.py`. Edit `install-service.sh` before running — replace `hamsa` with your username in the `User=` line, the `ExecStart=` path, and all sudoers entries.
+If you prefer to install components individually:
 
-Also set your validator JSON path in `metrics_server.py`:
-```python
-_json_files = list(Path("/home/hamsa/.ripple").glob("*.json"))
-```
-Change `/home/hamsa/.ripple` to wherever your validator key JSON is stored.
+1. Copy and fill in the config template:
+   ```bash
+   cp config/validator.conf.example config/validator.conf
+   # Edit config/validator.conf with your values
+   sudo mkdir -p /etc/validator-node
+   sudo cp config/validator.conf /etc/validator-node/validator.conf
+   ```
 
-### 2. RAPL CPU power metrics (optional)
+2. Install the metrics server:
+   ```bash
+   sudo bash motd/install-service.sh
+   ```
 
-Installs a tiny wrapper script that reads Intel RAPL energy counters. Skip this if you don't have an Intel CPU or don't want power draw metrics.
+3. Install RAPL power reader (Intel CPUs, optional):
+   ```bash
+   sudo bash motd/install-rapl.sh
+   ```
 
-```bash
-sudo bash install-rapl.sh
-```
-
-### 3. MOTD dashboard
-
-Installs the cron job (runs every 30s as root) and hooks it into `/etc/update-motd.d/` so the dashboard renders on SSH login.
-
-```bash
-sudo cp motd-validator-render /usr/local/bin/motd-validator-render
-sudo chmod 755 /usr/local/bin/motd-validator-render
-sudo bash cron-install.sh
-```
-
-**Adapt for your username:** `motd-validator-render` calls `curl http://127.0.0.1:8080/metrics` — no username dependency there. But review the top of the script for any hardcoded paths before copying.
+4. Install the MOTD cron and dashboard hook:
+   ```bash
+   sudo cp motd/motd-validator-render /usr/local/bin/motd-validator-render
+   sudo chmod 755 /usr/local/bin/motd-validator-render
+   sudo bash motd/cron-install.sh
+   ```
 
 ---
 
