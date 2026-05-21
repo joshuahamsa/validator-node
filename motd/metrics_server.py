@@ -275,9 +275,15 @@ def get_amendments() -> list:
             if data.get("enabled"):
                 continue
             name = data.get("name", "")
-            if name in _OBSOLETE_FEATURES:
+            if name in _OBSOLETE_FEATURES or data.get("vetoed") == "Obsolete":
                 continue
-            vote = overrides.get(hash_) or _VOTE_DEFAULTS.get(name, "no")
+            vetoed_val = data.get("vetoed")
+            if vetoed_val is True:
+                vote = "no"
+            elif vetoed_val is False:
+                vote = "yes"
+            else:
+                vote = overrides.get(hash_) or _VOTE_DEFAULTS.get(name, "no")
             result.append({
                 "name": name,
                 "vote": vote,

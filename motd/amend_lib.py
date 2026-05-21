@@ -64,9 +64,9 @@ def compute_working_set(
     obsolete: set,
     cfg_overrides: dict,
 ) -> list:
-    """Return amendments where current vote differs from network default.
+    """Return all pending (not yet enabled, not obsolete) amendments.
 
-    Excludes: enabled amendments, obsolete amendments, votes matching default.
+    Excludes: enabled amendments, obsolete amendments.
     Sorted: majority amendments first, then alphabetical by name.
     """
     result = []
@@ -74,12 +74,16 @@ def compute_working_set(
         if data.get("enabled"):
             continue
         name = data.get("name", "")
-        if name in obsolete:
+        if name in obsolete or data.get("vetoed") == "Obsolete":
             continue
         default_vote = vote_defaults.get(name, "no")
-        your_vote = cfg_overrides.get(hash_) or default_vote
-        if your_vote == default_vote:
-            continue
+        vetoed_val = data.get("vetoed")
+        if vetoed_val is True:
+            your_vote = "no"
+        elif vetoed_val is False:
+            your_vote = "yes"
+        else:
+            your_vote = cfg_overrides.get(hash_) or default_vote
         result.append({
             "hash": hash_,
             "name": name,

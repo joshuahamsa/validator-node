@@ -86,15 +86,15 @@ class TestComputeWorkingSet(unittest.TestCase):
         names = [a["name"] for a in result]
         self.assertIn("fix1781", names)
 
-    def test_excludes_matching_default(self):
-        # MultiSignReserve default "yes", no override → matches default → excluded
+    def test_includes_when_vote_matches_default(self):
+        # All non-enabled, non-obsolete amendments appear regardless of default match
         features = self._features()
         vote_defaults = {"fix1781": "no", "MultiSignReserve": "yes"}
         obsolete = set()
         overrides = {}
         result = amend_lib.compute_working_set(features, vote_defaults, obsolete, overrides)
         names = [a["name"] for a in result]
-        self.assertNotIn("MultiSignReserve", names)
+        self.assertIn("MultiSignReserve", names)
 
     def test_excludes_enabled(self):
         features = self._features()
@@ -112,6 +112,24 @@ class TestComputeWorkingSet(unittest.TestCase):
         overrides = {"HASH_OBS": "yes"}
         result = amend_lib.compute_working_set(features, vote_defaults, obsolete, overrides)
         self.assertEqual(result, [])
+
+    def test_live_vetoed_obsolete_filtered(self):
+        # vetoed=="Obsolete" in live data filters even when name not in obsolete set
+        features = {"HASH_OBS": {"name": "fixNFTokenDirV1", "supported": True, "vetoed": "Obsolete"}}
+        result = amend_lib.compute_working_set(features, {}, set(), {})
+        self.assertEqual(result, [])
+
+    def test_live_vetoed_false_gives_yes_vote(self):
+        # wallet.db says yes (vetoed=false) overrides DefaultNo from features.macro
+        features = {"HASH_X": {"name": "XChainBridge", "supported": True, "vetoed": False}}
+        result = amend_lib.compute_working_set(features, {"XChainBridge": "no"}, set(), {})
+        self.assertEqual(result[0]["your_vote"], "yes")
+
+    def test_live_vetoed_true_gives_no_vote(self):
+        # wallet.db says no (vetoed=true) overrides DefaultYes from features.macro
+        features = {"HASH_Y": {"name": "MultiSignReserve", "supported": True, "vetoed": True}}
+        result = amend_lib.compute_working_set(features, {"MultiSignReserve": "yes"}, set(), {})
+        self.assertEqual(result[0]["your_vote"], "no")
 
 
 class TestUpdateCfgText(unittest.TestCase):

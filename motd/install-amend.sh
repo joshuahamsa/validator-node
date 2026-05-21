@@ -13,7 +13,9 @@ echo "=== Installing Python dependencies into .venv ==="
 
 echo "=== Installing amend script ==="
 cp "$(dirname "$0")/amend" /usr/local/bin/amend
+cp "$(dirname "$0")/amend_lib.py" /usr/local/bin/amend_lib.py
 chmod 755 /usr/local/bin/amend
+chmod 644 /usr/local/bin/amend_lib.py
 
 echo "=== Writing sudoers entry ==="
 tee /etc/sudoers.d/amend > /dev/null << 'EOF'

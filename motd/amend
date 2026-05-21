@@ -153,7 +153,7 @@ def main() -> None:
         a["_written_vote"] = cfg_overrides.get(a["hash"], a["default_vote"])
 
     if not amendments:
-        console.print("\n[green]✓ Nothing to review — all your votes match network defaults.[/]")
+        console.print("\n[green]✓ Nothing to review — no pending amendments.[/]")
         return
 
     console.print(f"\n[bold]{len(amendments)} amendment(s) to review.[/] Use arrow keys or j/k to navigate.\n")

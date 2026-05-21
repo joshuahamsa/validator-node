@@ -17,7 +17,7 @@ After=network.target rippled.service
 [Service]
 Type=simple
 User=hamsa
-ExecStart=/usr/bin/python3 /home/hamsa/motd/metrics_server.py
+ExecStart=/usr/bin/python3 /home/hamsa/validator-node/motd/metrics_server.py
 Restart=always
 RestartSec=5
 StandardOutput=journal
