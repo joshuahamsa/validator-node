@@ -303,5 +303,24 @@ done < <(print_amendments)
 $found_unsup || fail "print_amendments: unsupported row found" "" "row with CryptoConditions"
 
 echo ""
+echo "=== amendment fallback (AMD_ERROR path) ==="
+
+# Verify AMD_ERROR=true when AMD_JSON is empty
+AMD_JSON='[]'
+AMD_ERROR=true
+amd_err_width_ok=false
+while IFS= read -r line; do
+    stripped=$(strip_ansi "$line")
+    if [[ "$stripped" =~ ^║ ]]; then
+        [[ ${#stripped} -eq 80 ]] \
+            && ok "fallback error state: row width 80" \
+            || fail "fallback error state: row width 80" "${#stripped}" "80"
+        amd_err_width_ok=true; break
+    fi
+done < <(print_amendments)
+$amd_err_width_ok || fail "fallback error state: produced row" "" "at least one row"
+AMD_ERROR=false
+
+echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ $FAIL -eq 0 ]]

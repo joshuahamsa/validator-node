@@ -290,17 +290,33 @@ collect_data() {
           }'
     ) || true
 
-    # ── Amendments: fetch from metrics server ──
+    # ── Amendments: metrics server first, rippled direct fallback ─────────────────
     local _metrics
     _metrics=$(curl -s --max-time 3 http://localhost:8080/metrics 2>/dev/null) || true
-    if [[ -z "$_metrics" ]]; then
-        AMD_ERROR=true
-    else
+    if [[ -n "$_metrics" ]]; then
         METRICS_JSON="$_metrics"
         AMD_JSON=$(printf '%s' "$METRICS_JSON" | jq -c '.amendments // []' 2>/dev/null) \
             || AMD_ERROR=true
         SYS_CPU_TEMP_C=$(printf '%s' "$METRICS_JSON" | jq -r '.system.cpu_temp_c // empty' 2>/dev/null || true)
         SYS_CPU_W=$(printf '%s' "$METRICS_JSON" | jq -r '.system.cpu_w // empty' 2>/dev/null || true)
+    else
+        # Fallback: query rippled directly. --rpc_ip is required for vetoed field.
+        local _feat
+        if _feat=$(sudo /usr/local/bin/rippled --rpc_ip=127.0.0.1:5006 feature 2>/dev/null); then
+            AMD_JSON=$(printf '%s' "$_feat" | jq -c '
+                [.result.features | to_entries[]
+                 | select(.value.enabled == false and .value.vetoed != "Obsolete")
+                 | {
+                     name: (.value.name // ""),
+                     vote: (if .value.vetoed == true then "no" else "yes" end),
+                     supported: (.value.supported // false),
+                     majority: (.value | has("majority"))
+                   }
+                ] | sort_by([if .majority then 0 else 1 end, .name])
+            ' 2>/dev/null) || AMD_ERROR=true
+        else
+            AMD_ERROR=true
+        fi
     fi
 }
 
