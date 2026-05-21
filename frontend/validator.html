@@ -31,8 +31,7 @@
   </div>
 
   <script>
-    // Update METRICS_URL to your own Tailscale Funnel endpoint.
-    const METRICS_URL = 'https://final.url'; // set by setup.sh
+    const METRICS_URL = ''; // set by setup.sh — run: bash motd/setup.sh
     const FETCH_INTERVAL_MS = 5000;
     const FETCH_TIMEOUT_MS = 4000;
 
@@ -194,6 +193,13 @@
     }
 
     async function fetchMetrics() {
+      if (!METRICS_URL) {
+        document.getElementById('val-pre').innerHTML =
+            '<span class="val-dim">  METRICS_URL not configured.\n  Run:  bash motd/setup.sh</span>';
+        document.getElementById('val-footer').textContent =
+            'configure METRICS_URL to enable live data';
+        return;
+      }
       const controller = new AbortController();
       const tid = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
       try {
