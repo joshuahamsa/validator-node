@@ -73,7 +73,8 @@ echo "Written: $CONFIG_FILE"
 # Patch validator.html METRICS_URL
 HTML="$REPO_DIR/frontend/validator.html"
 if [[ -f "$HTML" && -n "$METRICS_URL" ]]; then
-    sed -i "s|const METRICS_URL = .*;.*|const METRICS_URL = '$METRICS_URL'; // set by setup.sh|" "$HTML"
+    _escaped_url="${METRICS_URL//&/\\&}"
+    sed -i "s|const METRICS_URL = .*;.*|const METRICS_URL = '$_escaped_url'; // set by setup.sh|" "$HTML"
     echo "Patched METRICS_URL in: $HTML"
 fi
 
