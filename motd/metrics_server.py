@@ -31,7 +31,7 @@ def _parse_vote_defaults() -> dict:
         with open(XRPL_FEATURES_SRC) as f:
             for line in f:
                 m = re.search(
-                    r'XRPL_FEATURE\(\s*(\w+)\s*,\s*\S+\s*,\s*VoteBehavior::Default(\w+)\)',
+                    r'XRPL_FEATURE\(\s*(\w+)\s*,[^,]+,\s*VoteBehavior::Default(\w+)',
                     line,
                 )
                 if m:
@@ -57,6 +57,8 @@ def _parse_cfg_overrides() -> dict:
                     current_section = stripped.strip("[]").strip()
                     continue
                 if not stripped or stripped.startswith("#"):
+                    continue
+                if current_section is None:
                     continue
                 hash_ = stripped.split()[0]
                 if current_section == "veto_amendments":
