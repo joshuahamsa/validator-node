@@ -1,0 +1,8 @@
+{
+  "name": "validator-tools",
+  "version": "1.0.0",
+  "description": "XRPL validator node tooling — dashboard, amendment voting, metrics service",
+  "author": {
+    "name": "joshuahamsa"
+  }
+}
