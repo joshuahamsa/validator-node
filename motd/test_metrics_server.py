@@ -152,8 +152,21 @@ class TestGetIdentity(unittest.TestCase):
     def test_returns_defaults_on_missing_file(self, _):
         result = metrics_server.get_identity()
         self.assertEqual(result["public_key"], "unknown")
-        self.assertEqual(result["domain"], "joshuahamsa.com")
+        self.assertEqual(result["domain"], "")
         self.assertFalse(result["revoked"])
+
+    @patch("builtins.open", side_effect=FileNotFoundError)
+    def test_domain_falls_back_to_env_var(self, _):
+        orig = os.environ.get("VALIDATOR_DOMAIN")
+        os.environ["VALIDATOR_DOMAIN"] = "mynode.example.com"
+        try:
+            result = metrics_server.get_identity()
+        finally:
+            if orig is None:
+                os.environ.pop("VALIDATOR_DOMAIN", None)
+            else:
+                os.environ["VALIDATOR_DOMAIN"] = orig
+        self.assertEqual(result["domain"], "mynode.example.com")
 
 
 class TestGetSystemInfo(unittest.TestCase):

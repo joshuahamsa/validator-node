@@ -15,9 +15,10 @@ from pathlib import Path
 
 XRPL_FEATURES_SRC = os.environ.get("XRPL_FEATURES_SRC", "")
 RIPPLED_CFG = os.environ.get("RIPPLED_CFG", "/etc/opt/ripple/rippled.cfg")
-RIPPLED = "/usr/local/bin/rippled"
-RAPL_READER = "/usr/local/bin/rapl-energy-uj"
-_json_files = list(Path("/home/hamsa/.ripple").glob("*.json"))
+RIPPLED = os.environ.get("RIPPLED_BIN", "/usr/local/bin/rippled")
+RAPL_READER = os.environ.get("RAPL_READER", "/usr/local/bin/rapl-energy-uj")
+_validator_json_dir = os.environ.get("VALIDATOR_JSON_DIR", "")
+_json_files = list(Path(_validator_json_dir).glob("*.json")) if _validator_json_dir else []
 VALIDATOR_JSON = str(_json_files[0]) if _json_files else ""
 PORT = 8080
 
@@ -119,7 +120,7 @@ def get_identity():
         return {
             "public_key": pubkey,
             "public_key_short": short,
-            "domain": data.get("domain", "joshuahamsa.com"),
+            "domain": data.get("domain", os.environ.get("VALIDATOR_DOMAIN", "")),
             "manifest_seq": str(data.get("token_sequence", "?")),
             "revoked": data.get("revoked", False),
         }
@@ -127,7 +128,7 @@ def get_identity():
         return {
             "public_key": "unknown",
             "public_key_short": "unkn...own",
-            "domain": "joshuahamsa.com",
+            "domain": os.environ.get("VALIDATOR_DOMAIN", ""),
             "manifest_seq": "?",
             "revoked": False,
         }
