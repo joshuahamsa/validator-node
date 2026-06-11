@@ -351,6 +351,52 @@ class TestVoteDefaults(unittest.TestCase):
         self.assertEqual(result, {})
 
 
+MOCK_RIPPLED_CFG = """
+[server]
+port_rpc_admin_local
+
+[veto_amendments]
+AAAA1111
+BBBB2222
+
+[amendments]
+CCCC3333
+"""
+
+
+class TestParseCfgOverrides(unittest.TestCase):
+    def test_parses_veto_and_amendments_sections(self):
+        with patch("builtins.open", mock_open(read_data=MOCK_RIPPLED_CFG)):
+            result = metrics_server._parse_cfg_overrides()
+        self.assertEqual(result, {
+            "AAAA1111": "no",
+            "BBBB2222": "no",
+            "CCCC3333": "yes",
+        })
+
+    @patch("metrics_server.subprocess.check_output",
+           return_value=MOCK_RIPPLED_CFG)
+    def test_falls_back_to_sudo_cat_on_permission_error(self, mock_sub):
+        with patch("builtins.open", side_effect=PermissionError):
+            result = metrics_server._parse_cfg_overrides()
+        self.assertEqual(result["AAAA1111"], "no")
+        self.assertEqual(result["CCCC3333"], "yes")
+        argv = mock_sub.call_args[0][0]
+        self.assertEqual(argv[:3], ["sudo", "-n", "/usr/bin/cat"])
+
+    @patch("metrics_server.subprocess.check_output",
+           side_effect=Exception("sudo: a password is required"))
+    def test_returns_empty_when_sudo_fallback_fails(self, _sub):
+        with patch("builtins.open", side_effect=PermissionError):
+            result = metrics_server._parse_cfg_overrides()
+        self.assertEqual(result, {})
+
+    def test_returns_empty_on_missing_file(self):
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            result = metrics_server._parse_cfg_overrides()
+        self.assertEqual(result, {})
+
+
 class TestGetAmendments(unittest.TestCase):
     def setUp(self):
         self._orig = metrics_server._VOTE_DEFAULTS.copy()
@@ -424,6 +470,14 @@ class TestGetAmendments(unittest.TestCase):
     def test_returns_empty_on_exception(self, _sub, _cfg):
         result = metrics_server.get_amendments()
         self.assertEqual(result, [])
+
+    @patch("metrics_server._parse_cfg_overrides",
+           side_effect=PermissionError("rippled.cfg unreadable"))
+    @patch("metrics_server.subprocess.check_output",
+           return_value=MOCK_AMENDMENTS_FEATURE_JSON)
+    def test_overrides_failure_does_not_blank_amendments(self, _sub, _cfg):
+        result = metrics_server.get_amendments()
+        self.assertEqual(len(result), 3)
 
 
 if __name__ == "__main__":

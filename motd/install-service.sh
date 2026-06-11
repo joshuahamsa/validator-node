@@ -41,6 +41,7 @@ echo "=== Writing /etc/sudoers.d/metrics-server ==="
 cat > /etc/sudoers.d/metrics-server <<EOF
 ${VALIDATOR_USERNAME} ALL=(ALL) NOPASSWD: /usr/local/bin/rippled
 ${VALIDATOR_USERNAME} ALL=(ALL) NOPASSWD: /usr/local/bin/rapl-energy-uj
+${VALIDATOR_USERNAME} ALL=(ALL) NOPASSWD: /usr/bin/cat ${RIPPLED_CFG:-/etc/opt/ripple/rippled.cfg}
 EOF
 chmod 0440 /etc/sudoers.d/metrics-server
 visudo -c

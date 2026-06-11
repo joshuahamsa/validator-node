@@ -43,31 +43,49 @@ def _parse_vote_defaults() -> dict:
     return result
 
 
+def _read_rippled_cfg() -> str:
+    """Read rippled.cfg, falling back to passwordless sudo when unreadable.
+
+    rippled.cfg is typically 600 rippled:rippled; the service user reads it
+    via the sudoers rule installed by install-service.sh.
+    """
+    try:
+        with open(RIPPLED_CFG) as f:
+            return f.read()
+    except FileNotFoundError:
+        return ""
+    except OSError:
+        pass
+    try:
+        return subprocess.check_output(
+            ["sudo", "-n", "/usr/bin/cat", RIPPLED_CFG],
+            timeout=5, text=True, stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return ""
+
+
 def _parse_cfg_overrides() -> dict:
     """Parse [veto_amendments] and [amendments] from rippled.cfg.
 
     Returns hash -> 'no' for vetoed, hash -> 'yes' for forced-yes.
     """
     result = {}
-    try:
-        current_section = None
-        with open(RIPPLED_CFG) as f:
-            for line in f:
-                stripped = line.strip()
-                if stripped.startswith("["):
-                    current_section = stripped.strip("[]").strip()
-                    continue
-                if not stripped or stripped.startswith("#"):
-                    continue
-                if current_section is None:
-                    continue
-                hash_ = stripped.split()[0]
-                if current_section == "veto_amendments":
-                    result[hash_] = "no"
-                elif current_section == "amendments":
-                    result[hash_] = "yes"
-    except FileNotFoundError:
-        pass
+    current_section = None
+    for line in _read_rippled_cfg().splitlines():
+        stripped = line.strip()
+        if stripped.startswith("["):
+            current_section = stripped.strip("[]").strip()
+            continue
+        if not stripped or stripped.startswith("#"):
+            continue
+        if current_section is None:
+            continue
+        hash_ = stripped.split()[0]
+        if current_section == "veto_amendments":
+            result[hash_] = "no"
+        elif current_section == "amendments":
+            result[hash_] = "yes"
     return result
 
 
@@ -291,7 +309,10 @@ def get_amendments() -> list:
             timeout=10, text=True, stderr=subprocess.DEVNULL,
         )
         features = json.loads(raw)["result"]["features"]
-        cfg_overrides = _parse_cfg_overrides()
+        try:
+            cfg_overrides = _parse_cfg_overrides()
+        except Exception:
+            cfg_overrides = {}
         result = []
         for hash_, data in features.items():
             if data.get("enabled"):
