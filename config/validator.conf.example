@@ -23,10 +23,23 @@ METRICS_URL=
 # Absolute path to this cloned repository
 REPO_PATH=
 
-# Optional: path to rippled Feature.cpp source for vote-default parsing
-# Only needed if you compile rippled from source; leave empty otherwise
+# Optional: path to xrpld Feature.cpp source for vote-default parsing
+# Only needed if you compile xrpld from source; leave empty otherwise
 XRPL_FEATURES_SRC=
 
-# Path to your rippled.cfg — used to parse [veto_amendments] and [amendments]
-# Default covers both common package install locations
-RIPPLED_CFG=/etc/opt/ripple/rippled.cfg
+# ── xrpld node binding ────────────────────────────────────────────────────────
+# xrpld is the renamed rippled package (3.2.0+). If you are still on the legacy
+# rippled package, set these to /usr/local/bin/rippled, rippled, and
+# /etc/opt/ripple/rippled.cfg respectively.
+
+# Path to the xrpld binary (used for server_info / feature queries)
+XRPLD_BIN=/usr/bin/xrpld
+
+# systemd unit name (used for journalctl alerts and service ordering)
+XRPLD_UNIT=xrpld
+
+# Path to your xrpld.cfg — used to parse [veto_amendments] and [amendments]
+XRPLD_CFG=/etc/xrpld/xrpld.cfg
+
+# Admin RPC endpoint — required for the `feature` call to expose vetoed state
+XRPLD_ADMIN_RPC=127.0.0.1:5006

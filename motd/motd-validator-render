@@ -29,6 +29,13 @@ VALIDATOR_JSON=""
 CACHE_FILE="/var/cache/motd-validator"
 CACHE_TMP="${CACHE_FILE}.tmp"
 
+# ── xrpld node binding ────────────────────────────────────────────────────────
+# xrpld is the renamed rippled package (3.2.0+). Overridable via validator.conf;
+# old RIPPLED_* values are honoured as a fallback for not-yet-migrated installs.
+XRPLD_BIN="${XRPLD_BIN:-${RIPPLED_BIN:-/usr/bin/xrpld}}"
+XRPLD_UNIT="${XRPLD_UNIT:-${RIPPLED_UNIT:-xrpld}}"
+XRPLD_ADMIN_RPC="${XRPLD_ADMIN_RPC:-127.0.0.1:5006}"
+
 # ── ANSI color codes ──────────────────────────────────────────────────────────
 RESET=$'\e[0m'
 CYAN=$'\e[96m'
@@ -185,7 +192,7 @@ print_header() {
 
 # ── Data collection (called once in main, sets globals) ───────────────────────
 
-# Validator / rippled globals
+# Validator / xrpld globals
 RPC_STATE="OFFLINE"
 RPC_LEDGER_SEQ="—"
 RPC_LEDGER_AGE="—"
@@ -223,9 +230,9 @@ AMD_JSON='[]'
 AMD_ERROR=false
 
 collect_data() {
-    # ── rippled ──
+    # ── xrpld ──
     local rpc_json
-    if rpc_json=$(timeout 5 /usr/local/bin/rippled server_info 2>/dev/null); then
+    if rpc_json=$(timeout 5 "$XRPLD_BIN" server_info 2>/dev/null); then
         RPC_STATE=$(printf '%s' "$rpc_json"   | jq -r '.result.info.server_state    // "unknown"')
         RPC_LEDGER_SEQ=$(printf '%s' "$rpc_json" | jq -r '.result.info.validated_ledger.seq // "—"')
         RPC_LEDGER_AGE=$(printf '%s' "$rpc_json" | jq -r '.result.info.validated_ledger.age // "—"')
@@ -277,20 +284,20 @@ collect_data() {
         NET_P2P_STATUS="CLOSED"
     fi
 
-    # ── Alerts: last 3 notable rippled log lines ──
+    # ── Alerts: last 3 notable xrpld log lines ──
     mapfile -t ALERT_LINES < <(
-        journalctl -u rippled -n 60 --no-pager -o short-iso 2>/dev/null \
+        journalctl -u "$XRPLD_UNIT" -n 60 --no-pager -o short-iso 2>/dev/null \
         | grep -iE 'warn|error|amendment|consensus lost|slow ledger' \
         | tail -3 \
         | awk '{
             ts = substr($1, 12, 5)
             $1=""; sub(/^ /, "")
-            sub(/[^ ]+ rippled\[[0-9]+\]: /, "")
+            sub(/[^ ]+ [^ ]+\[[0-9]+\]: /, "")
             printf "[%s] %s\n", ts, substr($0, 1, 60)
           }'
     ) || true
 
-    # ── Amendments: metrics server first, rippled direct fallback ─────────────────
+    # ── Amendments: metrics server first, xrpld direct fallback ─────────────────
     local _metrics
     _metrics=$(curl -s --max-time 3 http://localhost:8080/metrics 2>/dev/null) || true
     if [[ -n "$_metrics" ]]; then
@@ -300,9 +307,9 @@ collect_data() {
         SYS_CPU_TEMP_C=$(printf '%s' "$METRICS_JSON" | jq -r '.system.cpu_temp_c // empty' 2>/dev/null || true)
         SYS_CPU_W=$(printf '%s' "$METRICS_JSON" | jq -r '.system.cpu_w // empty' 2>/dev/null || true)
     else
-        # Fallback: query rippled directly. --rpc_ip is required for vetoed field.
+        # Fallback: query xrpld directly. --rpc_ip is required for vetoed field.
         local _feat
-        if _feat=$(sudo /usr/local/bin/rippled --rpc_ip=127.0.0.1:5006 feature 2>/dev/null); then
+        if _feat=$(sudo "$XRPLD_BIN" --rpc_ip="$XRPLD_ADMIN_RPC" feature 2>/dev/null); then
             AMD_JSON=$(printf '%s' "$_feat" | jq -c '
                 [.result.features | to_entries[]
                  | select(.value.enabled == false and .value.vetoed != "Obsolete")
@@ -439,10 +446,10 @@ print_peers_network() {
     # Tailscale — show dash if unavailable
     local ts_val="${NET_TAILSCALE:-—}"
 
-    # Rippled process uptime (RPC_UPTIME_S is seconds as integer from server_info)
-    local rippled_uptime="—"
+    # xrpld process uptime (RPC_UPTIME_S is seconds as integer from server_info)
+    local node_uptime="—"
     if [[ "$RPC_UPTIME_S" =~ ^[0-9]+$ ]]; then
-        rippled_uptime=$(format_uptime "$RPC_UPTIME_S")
+        node_uptime=$(format_uptime "$RPC_UPTIME_S")
     fi
 
     # Disconnect count color
@@ -476,9 +483,9 @@ print_peers_network() {
     box_row2 \
         "    Disconnects ${disc_color}$(rpad "$RPC_PEER_DISC" $(( lw - 16 )))${RESET}" \
         "    Tailscale  ${GREEN}$(rpad "$ts_val" $(( rw - 15 )))${RESET}"
-    # Rippled uptime / SSH sessions
+    # xrpld uptime / SSH sessions
     box_row2 \
-        "    Uptime      ${GREEN}$(rpad "$rippled_uptime" $(( lw - 16 )))${RESET}" \
+        "    Uptime      ${GREEN}$(rpad "$node_uptime" $(( lw - 16 )))${RESET}" \
         "    SSH        ${GREEN}$(rpad "${NET_SSH_SESSIONS} active" $(( rw - 15 )))${RESET}"
     # Empty left / P2P status
     box_row2 \
@@ -634,7 +641,7 @@ main() {
         {
             box_top
             box_row "$(rpad "  ${RED}LFG XRPL VALIDATOR — DASHBOARD RENDER FAILED${RESET}" $(( 78 + ${#RED} + ${#RESET} )))"
-            box_row "$(rpad "  ${DIM}Check: sudo journalctl -u rippled -n 20${RESET}"       $(( 78 + ${#DIM} + ${#RESET} )))"
+            box_row "$(rpad "  ${DIM}Check: sudo journalctl -u ${XRPLD_UNIT} -n 20${RESET}"       $(( 78 + ${#DIM} + ${#RESET} )))"
             box_bottom
         } > "$CACHE_TMP"
     }

@@ -8,6 +8,13 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+# Load config so the sudoers rules match the node binary/cfg this host uses.
+SYSTEM_CONFIG="/etc/validator-node/validator.conf"
+[[ -f "$SYSTEM_CONFIG" ]] && source "$SYSTEM_CONFIG" || true
+VALIDATOR_USERNAME="${VALIDATOR_USERNAME:-hamsa}"
+XRPLD_BIN="${XRPLD_BIN:-${RIPPLED_BIN:-/usr/bin/xrpld}}"
+XRPLD_CFG="${XRPLD_CFG:-${RIPPLED_CFG:-/etc/xrpld/xrpld.cfg}}"
+
 echo "=== Writing /usr/local/bin/rapl-energy-uj ==="
 tee /usr/local/bin/rapl-energy-uj > /dev/null << 'EOF'
 #!/bin/sh
@@ -16,10 +23,13 @@ EOF
 chmod 0755 /usr/local/bin/rapl-energy-uj
 echo "  done."
 
+# Rewrite the full metrics-server sudoers (keep it in sync with install-service.sh
+# so this never drops the binary or cfg-read grants the dashboard depends on).
 echo "=== Updating /etc/sudoers.d/metrics-server ==="
-tee /etc/sudoers.d/metrics-server > /dev/null << 'EOF'
-hamsa ALL=(ALL) NOPASSWD: /usr/local/bin/rippled server_info
-hamsa ALL=(ALL) NOPASSWD: /usr/local/bin/rapl-energy-uj
+tee /etc/sudoers.d/metrics-server > /dev/null <<EOF
+${VALIDATOR_USERNAME} ALL=(ALL) NOPASSWD: ${XRPLD_BIN}
+${VALIDATOR_USERNAME} ALL=(ALL) NOPASSWD: /usr/local/bin/rapl-energy-uj
+${VALIDATOR_USERNAME} ALL=(ALL) NOPASSWD: /usr/bin/cat ${XRPLD_CFG}
 EOF
 chmod 0440 /etc/sudoers.d/metrics-server
 visudo -c

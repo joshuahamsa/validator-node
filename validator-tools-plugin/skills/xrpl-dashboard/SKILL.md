@@ -1,6 +1,6 @@
 ---
 name: xrpl-dashboard
-description: Use this skill when working on the XRPL validator node dashboard, metrics server, amendment voting, or any rippled interaction on letseffinggo. Covers debugging the /metrics endpoint, amendment vote display, the amend CLI, service management, sudoers, and the admin RPC. Trigger on any mention of: dashboard, amendments, metrics-server, amend CLI, rippled feature, validator, wallet.db, vetoed, motd, metrics endpoint.
+description: Use this skill when working on the XRPL validator node dashboard, metrics server, amendment voting, or any xrpld (formerly rippled) interaction on letseffinggo. Covers debugging the /metrics endpoint, amendment vote display, the amend CLI, service management, sudoers, and the admin RPC. Trigger on any mention of: dashboard, amendments, metrics-server, amend CLI, xrpld feature, rippled feature, validator, wallet.db, vetoed, motd, metrics endpoint.
 ---
 
 # XRPL Validator Dashboard — Working Knowledge
@@ -8,14 +8,18 @@ description: Use this skill when working on the XRPL validator node dashboard, m
 ## Architecture
 
 ```
-rippled (port 5006 admin RPC)
-    ↓ sudo rippled --rpc_ip=127.0.0.1:5006 feature/server_info
+xrpld (port 5006 admin RPC)   # renamed rippled package, 3.2.0+
+    ↓ sudo xrpld --rpc_ip=127.0.0.1:5006 feature/server_info
 metrics_server.py  →  GET /metrics  →  http://127.0.0.1:8080/metrics
     ↓
 motd-validator-render (bash, called on SSH login)
 ```
 
-All files live at `/home/hamsa/validator-node/motd/`.
+All files live at `/home/hamsa/validator-node/motd/`. The binary, systemd unit,
+and cfg path are configurable in `validator.conf` via `XRPLD_BIN`
+(`/usr/bin/xrpld`), `XRPLD_UNIT` (`xrpld`), and `XRPLD_CFG`
+(`/etc/xrpld/xrpld.cfg`). Legacy `rippled` installs work by pointing those at the
+old values.
 
 ## Key Commands
 
@@ -26,7 +30,7 @@ curl -s http://127.0.0.1:8080/metrics | python3 -m json.tool | grep -A3 '"amendm
 
 ### Check amendment vote state (ground truth)
 ```bash
-sudo rippled --rpc_ip=127.0.0.1:5006 feature \
+sudo xrpld --rpc_ip=127.0.0.1:5006 feature \
   | jq '.result.features | to_entries
         | map(select(.value.enabled == false and .value.vetoed != "Obsolete"))
         | from_entries'
@@ -63,39 +67,39 @@ The admin RPC returns a `vetoed` field per pending amendment:
 - `vetoed: "Obsolete"` → **skip** (filtered out of display)
 - `enabled: true`  → **skip** (already active)
 
-**Do not** read wallet.db or rippled.cfg to determine vote state — the admin RPC already synthesizes both.
+**Do not** read wallet.db or xrpld.cfg to determine vote state — the admin RPC already synthesizes both.
 
 ## Critical Lessons
 
 ### `--rpc_ip=127.0.0.1:5006` is required for complete data
-Without this flag, `rippled feature` omits the `vetoed` field entirely for non-vetoed amendments. With it, every amendment gets `vetoed: true/false/"Obsolete"`. Always use the flag.
+Without this flag, `xrpld feature` omits the `vetoed` field entirely for non-vetoed amendments. With it, every amendment gets `vetoed: true/false/"Obsolete"`. Always use the flag.
 
 ### sudoers: no `=` signs in argument specs
-`hamsa ALL=(ALL) NOPASSWD: /usr/local/bin/rippled --rpc_ip=127.0.0.1:5006 feature` → **syntax error**.  
-Use bare path: `hamsa ALL=(ALL) NOPASSWD: /usr/local/bin/rippled` (no args = any args allowed).
+`hamsa ALL=(ALL) NOPASSWD: /usr/bin/xrpld --rpc_ip=127.0.0.1:5006 feature` → **syntax error**.  
+Use bare path: `hamsa ALL=(ALL) NOPASSWD: /usr/bin/xrpld` (no args = any args allowed).
 
 ### Service changes need a restart
 `systemctl start` is a no-op if service is running. Always use `systemctl restart` after code or config changes.
 
-### amend CLI writes to rippled.cfg; rippled picks it up on restart
-The `amend` CLI writes amendment votes to `/etc/opt/ripple/rippled.cfg`. rippled synthesizes those into the `vetoed` field on its next restart. Until restart, the RPC still reflects the pre-vote state.
+### amend CLI writes to xrpld.cfg; xrpld picks it up on restart
+The `amend` CLI writes amendment votes to `/etc/xrpld/xrpld.cfg`. xrpld synthesizes those into the `vetoed` field on its next restart. Until restart, the RPC still reflects the pre-vote state.
 
 ## Sudoers Setup
 
 **metrics-server** (`/etc/sudoers.d/metrics-server`):
 ```
-hamsa ALL=(ALL) NOPASSWD: /usr/local/bin/rippled
+hamsa ALL=(ALL) NOPASSWD: /usr/bin/xrpld
 hamsa ALL=(ALL) NOPASSWD: /usr/local/bin/rapl-energy-uj
 ```
 
 **amend CLI** (`/etc/sudoers.d/amend`):
 ```
-hamsa ALL=(ALL) NOPASSWD: /usr/local/bin/rippled
-hamsa ALL=(ALL) NOPASSWD: /usr/bin/cat /etc/opt/ripple/rippled.cfg
-hamsa ALL=(ALL) NOPASSWD: /usr/bin/cp /etc/opt/ripple/rippled.cfg /etc/opt/ripple/rippled.cfg.bak
-hamsa ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/opt/ripple/rippled.cfg
-hamsa ALL=(ALL) NOPASSWD: /bin/systemctl restart rippled
-hamsa ALL=(ALL) NOPASSWD: /bin/journalctl -u rippled -n 20 --no-pager
+hamsa ALL=(ALL) NOPASSWD: /usr/bin/xrpld
+hamsa ALL=(ALL) NOPASSWD: /usr/bin/cat /etc/xrpld/xrpld.cfg
+hamsa ALL=(ALL) NOPASSWD: /usr/bin/cp /etc/xrpld/xrpld.cfg /etc/xrpld/xrpld.cfg.bak
+hamsa ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/xrpld/xrpld.cfg
+hamsa ALL=(ALL) NOPASSWD: /bin/systemctl restart xrpld
+hamsa ALL=(ALL) NOPASSWD: /bin/journalctl -u xrpld -n 20 --no-pager
 ```
 
 ## File Map

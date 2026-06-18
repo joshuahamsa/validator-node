@@ -20,7 +20,7 @@ echo "=== Writing /etc/systemd/system/metrics-server.service ==="
 cat > /etc/systemd/system/metrics-server.service <<EOF
 [Unit]
 Description=XRPL Validator Metrics HTTP Server
-After=network.target rippled.service
+After=network.target ${XRPLD_UNIT:-xrpld}.service
 
 [Service]
 Type=simple
@@ -39,9 +39,9 @@ echo "  done."
 
 echo "=== Writing /etc/sudoers.d/metrics-server ==="
 cat > /etc/sudoers.d/metrics-server <<EOF
-${VALIDATOR_USERNAME} ALL=(ALL) NOPASSWD: /usr/local/bin/rippled
+${VALIDATOR_USERNAME} ALL=(ALL) NOPASSWD: ${XRPLD_BIN:-/usr/bin/xrpld}
 ${VALIDATOR_USERNAME} ALL=(ALL) NOPASSWD: /usr/local/bin/rapl-energy-uj
-${VALIDATOR_USERNAME} ALL=(ALL) NOPASSWD: /usr/bin/cat ${RIPPLED_CFG:-/etc/opt/ripple/rippled.cfg}
+${VALIDATOR_USERNAME} ALL=(ALL) NOPASSWD: /usr/bin/cat ${XRPLD_CFG:-/etc/xrpld/xrpld.cfg}
 EOF
 chmod 0440 /etc/sudoers.d/metrics-server
 visudo -c

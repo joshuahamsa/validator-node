@@ -14,15 +14,24 @@ import time
 from pathlib import Path
 
 XRPL_FEATURES_SRC = os.environ.get("XRPL_FEATURES_SRC", "")
-RIPPLED_CFG = os.environ.get("RIPPLED_CFG", "/etc/opt/ripple/rippled.cfg")
-RIPPLED = os.environ.get("RIPPLED_BIN", "/usr/local/bin/rippled")
+# xrpld is the renamed rippled package (3.2.0+). New env names are XRPLD_*;
+# the old RIPPLED_* names are still honoured as a fallback for in-place upgrades.
+XRPLD_CFG = (os.environ.get("XRPLD_CFG")
+             or os.environ.get("RIPPLED_CFG")
+             or "/etc/xrpld/xrpld.cfg")
+XRPLD = (os.environ.get("XRPLD_BIN")
+         or os.environ.get("RIPPLED_BIN")
+         or "/usr/bin/xrpld")
+XRPLD_UNIT = (os.environ.get("XRPLD_UNIT")
+              or os.environ.get("RIPPLED_UNIT")
+              or "xrpld")
 RAPL_READER = os.environ.get("RAPL_READER", "/usr/local/bin/rapl-energy-uj")
 _validator_json_dir = os.environ.get("VALIDATOR_JSON_DIR", "")
 _json_files = list(Path(_validator_json_dir).glob("*.json")) if _validator_json_dir else []
 VALIDATOR_JSON = str(_json_files[0]) if _json_files else ""
 PORT = 8080
 
-RIPPLED_ADMIN_RPC = "127.0.0.1:5006"
+XRPLD_ADMIN_RPC = os.environ.get("XRPLD_ADMIN_RPC") or "127.0.0.1:5006"
 
 
 def _parse_vote_defaults() -> dict:
@@ -44,13 +53,13 @@ def _parse_vote_defaults() -> dict:
 
 
 def _read_rippled_cfg() -> str:
-    """Read rippled.cfg, falling back to passwordless sudo when unreadable.
+    """Read the xrpld config, falling back to passwordless sudo when unreadable.
 
-    rippled.cfg is typically 600 rippled:rippled; the service user reads it
+    xrpld.cfg is typically 600 xrpld:xrpld; the service user reads it
     via the sudoers rule installed by install-service.sh.
     """
     try:
-        with open(RIPPLED_CFG) as f:
+        with open(XRPLD_CFG) as f:
             return f.read()
     except FileNotFoundError:
         return ""
@@ -58,7 +67,7 @@ def _read_rippled_cfg() -> str:
         pass
     try:
         return subprocess.check_output(
-            ["sudo", "-n", "/usr/bin/cat", RIPPLED_CFG],
+            ["sudo", "-n", "/usr/bin/cat", XRPLD_CFG],
             timeout=5, text=True, stderr=subprocess.DEVNULL,
         )
     except Exception:
@@ -99,7 +108,7 @@ _rapl_prev_ts: "float | None" = None
 def get_validator_info():
     try:
         raw = subprocess.check_output(
-            ["sudo", RIPPLED, "server_info"],
+            ["sudo", XRPLD, "server_info"],
             timeout=5, text=True, stderr=subprocess.DEVNULL
         )
         info = json.loads(raw)["result"]["info"]
@@ -289,13 +298,15 @@ def get_network_info():
 def get_alerts():
     try:
         out = subprocess.check_output(
-            ["journalctl", "-u", "rippled", "-n", "60", "--no-pager", "-o", "short-iso"],
+            ["journalctl", "-u", XRPLD_UNIT, "-n", "60", "--no-pager", "-o", "short-iso"],
             text=True, timeout=5, stderr=subprocess.DEVNULL
         )
         alerts = []
         for line in out.splitlines():
             if re.search(r'(?i)\b(warn|error|wrn|err)\b', line):
-                cleaned = re.sub(r'^\S+ \S+ rippled\[\d+\]: ', '', line)
+                # Strip the journal timestamp + "<host> <proc>[pid]: " prefix.
+                # Process-name-agnostic so it works for both rippled and xrpld.
+                cleaned = re.sub(r'^\S+ \S+ \S+\[\d+\]: ', '', line)
                 alerts.append(cleaned[:120])
         return alerts[-3:] if alerts else []
     except Exception:
@@ -305,7 +316,7 @@ def get_alerts():
 def get_amendments() -> list:
     try:
         raw = subprocess.check_output(
-            ["sudo", RIPPLED, f"--rpc_ip={RIPPLED_ADMIN_RPC}", "feature"],
+            ["sudo", XRPLD, f"--rpc_ip={XRPLD_ADMIN_RPC}", "feature"],
             timeout=10, text=True, stderr=subprocess.DEVNULL,
         )
         features = json.loads(raw)["result"]["features"]

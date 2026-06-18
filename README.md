@@ -1,6 +1,6 @@
 # XRPL Validator Node Tooling
 
-Terminal dashboard and JSON metrics endpoint for an XRPL validator node running on Ubuntu with rippled.
+Terminal dashboard and JSON metrics endpoint for an XRPL validator node running on Ubuntu with xrpld (the renamed `rippled` package, 3.2.0+).
 
 On every SSH login you get a live dashboard showing validator state, system resources, amendment votes, and network info. The same data is served as JSON at `http://127.0.0.1:8080/metrics` for use by external dashboards or monitoring tools.
 
@@ -15,7 +15,7 @@ On every SSH login you get a live dashboard showing validator state, system reso
 - CPU / RAM / disk usage with progress bars, CPU temperature, CPU power draw (Intel RAPL)
 - LAN + Tailscale IP, SSH session count, P2P port status
 - Pending amendment list with your current vote (YES/NO) and network majority status
-- Recent rippled warnings/errors
+- Recent xrpld warnings/errors
 
 **`GET /metrics` JSON endpoint** (port 8080, localhost):
 - Same data as above in machine-readable JSON, with CORS enabled
@@ -30,7 +30,7 @@ On every SSH login you get a live dashboard showing validator state, system reso
 ## Prerequisites
 
 - Ubuntu 22.04+ (or similar Debian-based distro)
-- [`rippled`](https://xrpl.org/install-rippled-on-ubuntu.html) installed and synced, admin RPC on `127.0.0.1:5006`
+- [`xrpld`](https://xrpl.org/docs/infrastructure/installation) installed and synced, admin RPC on `127.0.0.1:5006` (legacy `rippled` installs also work — point the `XRPLD_*` keys in `config/validator.conf` at the old binary/unit/cfg; see `config/validator.conf.example`)
 - Python 3.10+
 - `sensors` (lm-sensors) for CPU temperature: `sudo apt install lm-sensors`
 - Intel CPU with RAPL support for power metrics (optional — skipped gracefully if absent)
@@ -120,10 +120,10 @@ tailscale funnel reset
 curl -s http://127.0.0.1:8080/metrics | python3 -m json.tool | grep -E '"state"|"ledger_seq"|"amendments"'
 ```
 
-Check amendment votes directly against rippled:
+Check amendment votes directly against xrpld:
 
 ```bash
-sudo rippled --rpc_ip=127.0.0.1:5006 feature \
+sudo xrpld --rpc_ip=127.0.0.1:5006 feature \
   | jq '.result.features
     | to_entries
     | map(select(.value.enabled == false and .value.vetoed != "Obsolete"))
