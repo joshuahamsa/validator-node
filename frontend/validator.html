@@ -1,4 +1,20 @@
 <!DOCTYPE html>
+<!--
+  ⚠ MIRROR REQUIRED — this file is NOT what gets served.
+
+  The live page at https://joshuahamsa.com/validator.html is served from a
+  separate repo: joshuahamsa/joshuahamsa.github.io (validator.html at its root).
+  This copy is the source of truth for development; that copy is the deploy
+  target. Editing only this one changes nothing that users see.
+
+  After changing this file, apply the same change there, then verify:
+    gh api repos/joshuahamsa/joshuahamsa.github.io/pages/builds/latest --jq .status
+    curl -s "https://joshuahamsa.com/validator.html?cb=$(date +%s)" | grep <your-change>
+
+  Apply changes deliberately rather than copying the file wholesale — the two
+  have deliberately diverged (METRICS_URL value/comment, and the
+  "METRICS_URL not configured" guard which only exists here).
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8">

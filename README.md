@@ -24,6 +24,10 @@ On every SSH login you get a live dashboard showing validator state, system reso
 - Browser-based version of the dashboard, fetches from your Tailscale Funnel URL every 5s
 - Graceful offline handling with last-seen timestamp
 - Host on GitHub Pages or any static host
+- ⚠ **Mirror required:** the author's live page (joshuahamsa.com/validator.html) is served
+  from the separate `joshuahamsa/joshuahamsa.github.io` repo, which keeps its own copy of
+  this file. Changes here do not reach it — apply them in both places. See the comment at
+  the top of `frontend/validator.html`.
 
 ---
 
