@@ -45,8 +45,22 @@
       return html + ' '.repeat(Math.max(0, width - visible.length));
     }
 
-    function span(cls, text) {
-      return `<span class="val-${cls}">${text}</span>`;
+    // Clip plain text to `width` visible chars, marking overflow with an ellipsis.
+    // Counterpart to rpad(): rpad only pads, so anything wider than its column
+    // silently widens the row and pushes the right-hand column out of alignment.
+    function clip(text, width) {
+      const s = String(text);
+      return s.length <= width ? s : s.slice(0, width - 1) + '…';
+    }
+
+    function escAttr(text) {
+      return String(text).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                         .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function span(cls, text, title) {
+      const attr = title ? ` title="${escAttr(title)}"` : '';
+      return `<span class="val-${cls}"${attr}>${text}</span>`;
     }
 
     function progressBar(pct) {
@@ -177,7 +191,15 @@
       const tempStr = s.cpu_temp_c !== null ? `  Temp ${span(tCls, s.cpu_temp_c + '°C')}` : '';
       lines.push(twoCol(`  peers    ${span(peerCls, String(v.peers))}`, tempStr));
       const cpuWStr = s.cpu_w !== null ? `  CPU W  ${span('white', s.cpu_w + 'W')}` : '';
-      lines.push(twoCol(`  version  ${span('dim', v.build_version)}`, cpuWStr));
+      // Custom builds (e.g. "3.2.0-hamsa-manifest-filter.1") blow past the 30-char
+      // left column and shove CPU W out of alignment — clip, keep full text on hover.
+      const verLabel = '  version  ';
+      const verFull = String(v.build_version);
+      // -1 keeps a space before the column divider so a clipped value doesn't
+      // butt against the border the way a full-width one would.
+      const verText = clip(verFull, 30 - verLabel.length - 1);
+      lines.push(twoCol(`${verLabel}${span('dim', verText, verText !== verFull ? verFull : null)}`,
+                        cpuWStr));
 
       lines.push(`╚${H65}╝`);
 
